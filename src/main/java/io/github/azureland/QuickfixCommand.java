@@ -2,6 +2,8 @@ package io.github.azureland;
 
 import java.math.BigDecimal;
 import java.util.List;
+import net.milkbowl.vault.economy.Economy;
+import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -11,6 +13,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.Repairable;
+import org.bukkit.plugin.RegisteredServiceProvider;
 
 final class QuickfixCommand implements TabExecutor {
     private final AzurelandPlugin plugin;
@@ -84,7 +87,7 @@ final class QuickfixCommand implements TabExecutor {
                 player.sendMessage(ChatColor.RED + "未接入 Vault 经济服务，暂时无法付费修复，请联系管理员。");
                 return true;
             }
-            if (!QuickFixEconomy.withdraw(plugin, player, cost)) {
+            if (!EconomyPayment.withdraw(plugin, player, cost)) {
                 return true;
             }
         }
@@ -99,5 +102,30 @@ final class QuickfixCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {
         return List.of();
+    }
+
+    // Loaded only for paid repairs when a Vault-compatible bridge is enabled.
+    private static final class EconomyPayment {
+        static boolean withdraw(AzurelandPlugin plugin, Player player, double cost) {
+            RegisteredServiceProvider<Economy> registration = plugin.getServer().getServicesManager()
+                    .getRegistration(Economy.class);
+            if (registration == null) {
+                player.sendMessage(ChatColor.RED + "未接入经济插件，暂时无法付费修复，请联系管理员。");
+                return false;
+            }
+            Economy economy = registration.getProvider();
+            if (!economy.has(player, cost)) {
+                player.sendMessage(ChatColor.RED + "金币不足，修复需要 " + economy.format(cost) + "。");
+                return false;
+            }
+            EconomyResponse response = economy.withdrawPlayer(player, cost);
+            if (!response.transactionSuccess()) {
+                player.sendMessage(ChatColor.RED + "扣费失败，未修复物品，请稍后重试。");
+                plugin.getLogger().warning("quickfix 扣费失败（" + player.getUniqueId() + "）："
+                        + response.errorMessage);
+                return false;
+            }
+            return true;
+        }
     }
 }
