@@ -116,12 +116,12 @@ final class HelpMeCommand implements TabExecutor {
         pending.remove(id);
     }
 
-    private synchronized String beginClear(UUID id) {
+    private synchronized String beginConversationChange(UUID id) {
         if (closed) {
             return "AI 助手正在关闭，请稍后重试。";
         }
         if (!pending.add(id)) {
-            return "你的问题或会话操作仍在处理中，请完成后再清空或删除会话。";
+            return "你的问题或会话操作仍在处理中，请完成后再修改名称、清空或删除会话。";
         }
         return null;
     }
@@ -130,6 +130,30 @@ final class HelpMeCommand implements TabExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
             showHelp(sender, label);
+            return true;
+        }
+        if (args.length > 0 && args[0].equalsIgnoreCase("conversations")) {
+            if (!sender.hasPermission("azureland.helpme.conversations.add")) {
+                sender.sendMessage(ChatColor.RED + "你没有调整玩家会话额度的权限。");
+                return true;
+            }
+            if (args.length != 4 || !args[1].equalsIgnoreCase("add")) {
+                sender.sendMessage(ChatColor.YELLOW + "用法：/" + label + " conversations add <玩家名> <数量>");
+                return true;
+            }
+            int amount;
+            try {
+                amount = Integer.parseInt(args[3]);
+            } catch (NumberFormatException ex) {
+                sender.sendMessage(ChatColor.RED + "会话额度数量必须是有效的整数，可以为负数。");
+                return true;
+            }
+            try {
+                plugin.getServer().getAsyncScheduler().runNow(plugin,
+                        task -> addConversationLimit(sender, args[2], amount));
+            } catch (IllegalPluginAccessException ignored) {
+                // The plugin is shutting down.
+            }
             return true;
         }
         if (args.length > 0 && args[0].equalsIgnoreCase("myresets")) {
@@ -339,6 +363,7 @@ final class HelpMeCommand implements TabExecutor {
                 ChatColor.YELLOW + prefix + "：打开会话箱子菜单（仅玩家）",
                 ChatColor.YELLOW + prefix + " <问题>：选择目标会话后提问（仅玩家）",
                 ChatColor.YELLOW + prefix + " create [会话名]：创建独立会话",
+                ChatColor.YELLOW + prefix + " conversations add <玩家名> <数量>：调整会话上限，可为负数（管理员）",
                 ChatColor.YELLOW + prefix + " history [会话名]：查看自己的会话历史",
                 ChatColor.YELLOW + prefix + " help：显示命令帮助",
                 ChatColor.YELLOW + prefix + " status [玩家名]：查询每日 credits 限额",
@@ -356,7 +381,7 @@ final class HelpMeCommand implements TabExecutor {
             return;
         }
         UUID id = player.getUniqueId();
-        menu.open(player, conversations.summaries(id), page);
+        menu.open(player, conversations.summaries(id), conversations.limit(id), page);
     }
 
     private void openSessionMenu(Player player, String session, int page) {
@@ -399,6 +424,7 @@ final class HelpMeCommand implements TabExecutor {
                 case 11 -> openQuestionDialog(player, inventory.session, inventory.page);
                 case 13 -> openHistory(player, inventory.session, inventory.page);
                 case 15 -> menu.openDeleteConfirmation(player, inventory.session, inventory.page);
+                case 20 -> openRenameDialog(player, inventory.session, inventory.page);
                 case 22 -> openMenu(player, inventory.page);
                 case 26 -> player.closeInventory();
                 default -> { }
@@ -584,13 +610,21 @@ final class HelpMeCommand implements TabExecutor {
     }
 
     private void openCreateDialog(Player player) {
+        UUID id = player.getUniqueId();
+        int limit = conversations.limit(id);
+        if (conversations.names(id).size() >= limit) {
+            player.sendMessage(ChatColor.YELLOW + "[AI] 会话数量已达到上限（" + limit
+                    + " 个），请删除已有会话或联系管理员增加额度。");
+            return;
+        }
         player.closeInventory();
         player.showDialog(Dialog.create(builder -> builder.empty()
                 .base(DialogBase.builder(Component.text("创建 AI 会话", NamedTextColor.AQUA))
                         .canCloseWithEscape(true)
                         .afterAction(DialogBase.DialogAfterAction.CLOSE)
                         .body(List.of(DialogBody.plainMessage(Component.text(
-                                "每个会话独立保存上下文。创建后可从主菜单打开操作。\n会话名最多 32 个字符，不能包含空白。"))))
+                                "每个会话独立保存上下文。创建后可从主菜单打开操作。\n会话名最多 32 个字符，不能包含空白。\n会话上限："
+                                        + limit + " 个。"))))
                         .inputs(List.of(DialogInput.text("name", Component.text("会话名"))
                                 .width(300).maxLength(32).build()))
                         .build())
@@ -601,6 +635,69 @@ final class HelpMeCommand implements TabExecutor {
                                 .build(),
                         ActionButton.builder(Component.text("返回菜单"))
                                 .action(dialogAction(player, response -> openMenu(player, 0))).build()))));
+    }
+
+    private void openRenameDialog(Player player, String session, int page) {
+        player.closeInventory();
+        player.showDialog(Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(Component.text("修改会话名称", NamedTextColor.AQUA))
+                        .canCloseWithEscape(true)
+                        .afterAction(DialogBase.DialogAfterAction.CLOSE)
+                        .body(List.of(DialogBody.plainMessage(Component.text("当前名称：" + session
+                                + "\n名称为 1–32 个字符，不能包含空白，不能与已有会话重名。"))))
+                        .inputs(List.of(DialogInput.text("name", Component.text("新名称"))
+                                .initial(session).width(300).maxLength(32).build()))
+                        .build())
+                .type(DialogType.confirmation(
+                        ActionButton.builder(Component.text("保存名称", NamedTextColor.GREEN))
+                                .action(dialogAction(player,
+                                        response -> renameSession(player, session, response.getText("name"), page)))
+                                .build(),
+                        ActionButton.builder(Component.text("返回会话操作"))
+                                .action(dialogAction(player, response -> openSessionMenu(player, session, page)))
+                                .build()))));
+    }
+
+    private void renameSession(Player player, String session, String input, int page) {
+        if (!player.hasPermission("azureland.helpme")) {
+            player.sendMessage(ChatColor.RED + "你没有使用 AI 助手的权限。");
+            return;
+        }
+        String name = input == null ? "" : input.trim();
+        try {
+            ConversationStore.validateName(name);
+        } catch (IllegalArgumentException ex) {
+            player.sendMessage(ChatColor.YELLOW + "[AI] " + ex.getMessage());
+            openRenameDialog(player, session, page);
+            return;
+        }
+        UUID id = player.getUniqueId();
+        String rejection = beginConversationChange(id);
+        if (rejection != null) {
+            player.sendMessage(ChatColor.YELLOW + rejection);
+            openSessionMenu(player, session, page);
+            return;
+        }
+        try {
+            plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
+                try {
+                    conversations.rename(id, session, name);
+                    sendCommandReply(player, ChatColor.GREEN + "[AI] 会话“" + session + "”已更名为“" + name + "”。");
+                    runOnPlayer(player, () -> openSessionMenu(player, name, page));
+                } catch (IllegalArgumentException ex) {
+                    sendCommandReply(player, ChatColor.YELLOW + "[AI] " + ex.getMessage());
+                    runOnPlayer(player, () -> openSessionMenu(player, session, page));
+                } catch (IOException ex) {
+                    sendCommandReply(player, ChatColor.RED + "[AI] 修改会话名称失败，请联系管理员检查日志。");
+                    plugin.getLogger().warning("无法保存玩家 AI 会话名称，请检查 conversations 目录。");
+                    runOnPlayer(player, () -> openSessionMenu(player, session, page));
+                } finally {
+                    finishRequest(id);
+                }
+            });
+        } catch (IllegalPluginAccessException ex) {
+            finishRequest(id);
+        }
     }
 
     private void openQuestionSessionDialog(Player player, String question) {
@@ -755,6 +852,25 @@ final class HelpMeCommand implements TabExecutor {
         }
     }
 
+    private void addConversationLimit(CommandSender sender, String target, int amount) {
+        UUID id = findPlayerId(target);
+        if (id == null) {
+            sendCommandReply(sender, ChatColor.YELLOW + "[AI] 找不到玩家 " + target
+                    + "，请输入已加入过服务器的玩家名。");
+            return;
+        }
+        try {
+            int limit = conversations.addLimit(id, amount);
+            sendCommandReply(sender, ChatColor.GREEN + "[AI] 已调整玩家 " + target + " 的会话额度（"
+                    + (amount >= 0 ? "+" : "") + amount + "），当前上限为 " + limit + " 个，已有会话保留。");
+        } catch (IllegalArgumentException ex) {
+            sendCommandReply(sender, ChatColor.YELLOW + "[AI] " + ex.getMessage());
+        } catch (IOException ex) {
+            sendCommandReply(sender, ChatColor.RED + "[AI] 调整会话额度失败，请联系管理员检查日志。");
+            plugin.getLogger().warning("无法读取或保存玩家 AI 会话额度，请检查 conversations 目录。");
+        }
+    }
+
     private void giveCredits(CommandSender sender, String target, long credits, AiSettings giveSettings) {
         UUID id = findPlayerId(target);
         if (id == null) {
@@ -891,7 +1007,7 @@ final class HelpMeCommand implements TabExecutor {
             return;
         }
         UUID id = player.getUniqueId();
-        String rejection = beginClear(id);
+        String rejection = beginConversationChange(id);
         if (rejection != null) {
             player.sendMessage(ChatColor.YELLOW + rejection);
             return;
@@ -922,7 +1038,7 @@ final class HelpMeCommand implements TabExecutor {
             return;
         }
         UUID id = player.getUniqueId();
-        String rejection = beginClear(id);
+        String rejection = beginConversationChange(id);
         if (rejection != null) {
             player.sendMessage(ChatColor.YELLOW + rejection);
             return;
@@ -1191,6 +1307,10 @@ final class HelpMeCommand implements TabExecutor {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("conversations")
+                && sender.hasPermission("azureland.helpme.conversations.add")) {
+            return "add".startsWith(args[1].toLowerCase(java.util.Locale.ROOT)) ? List.of("add") : List.of();
+        }
         if (args.length == 2 && sender instanceof Player player
                 && ((args[0].equalsIgnoreCase("history")
                         && sender.hasPermission("azureland.helpme"))
@@ -1207,9 +1327,11 @@ final class HelpMeCommand implements TabExecutor {
                 && sender.hasPermission("azureland.helpme.reset");
         boolean resetGive = args.length == 3 && args[0].equalsIgnoreCase("reset")
                 && args[1].equalsIgnoreCase("give") && sender.hasPermission("azureland.helpme.reset.give");
+        boolean conversationsAdd = args.length == 3 && args[0].equalsIgnoreCase("conversations")
+                && args[1].equalsIgnoreCase("add") && sender.hasPermission("azureland.helpme.conversations.add");
         boolean resetGiveOption = args.length == 2 && args[0].equalsIgnoreCase("reset")
                 && sender.hasPermission("azureland.helpme.reset.give");
-        if (statusOthers || give || reset || resetGive || resetGiveOption) {
+        if (statusOthers || give || reset || resetGive || resetGiveOption || conversationsAdd) {
             String prefix = args[args.length - 1].toLowerCase(java.util.Locale.ROOT);
             List<String> completions = new ArrayList<>();
             if ((reset || resetGive) && "all".startsWith(prefix)) {
@@ -1218,7 +1340,7 @@ final class HelpMeCommand implements TabExecutor {
             if (resetGiveOption && "give".startsWith(prefix)) {
                 completions.add("give");
             }
-            if (statusOthers || give || reset || resetGive) {
+            if (statusOthers || give || reset || resetGive || conversationsAdd) {
                 for (Player player : plugin.getServer().getOnlinePlayers()) {
                     if (player.getName().toLowerCase(java.util.Locale.ROOT).startsWith(prefix)) {
                         completions.add(player.getName());
@@ -1244,6 +1366,9 @@ final class HelpMeCommand implements TabExecutor {
         }
         if (sender.hasPermission("azureland.helpme.give") && "give".startsWith(prefix)) {
             completions.add("give");
+        }
+        if (sender.hasPermission("azureland.helpme.conversations.add") && "conversations".startsWith(prefix)) {
+            completions.add("conversations");
         }
         if ((sender.hasPermission("azureland.helpme.reset") || sender.hasPermission("azureland.helpme.reset.give"))
                 && "reset".startsWith(prefix)) {

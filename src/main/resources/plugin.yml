@@ -8,7 +8,7 @@ description: Item repair, portable workstations and a configurable multi-provide
 commands:
   helpme:
     description: 打开 AI 会话菜单或向服务器 AI 助手提问
-    usage: /helpme 或 /helpme <问题> 或 /helpme create [会话名] 或 /helpme history [会话名] 或 /helpme clear <会话名> 或 /helpme help 或 /helpme status [玩家名] 或 /helpme give <玩家名> <credits> 或 /helpme reset <玩家名|all> 或 /helpme myresets 或 /helpme reset give <玩家名|all> <数量> 或 /helpme reload
+    usage: /helpme 或 /helpme <问题> 或 /helpme create [会话名] 或 /helpme conversations add <玩家名> <数量> 或 /helpme history [会话名] 或 /helpme clear <会话名> 或 /helpme help 或 /helpme status [玩家名] 或 /helpme give <玩家名> <credits> 或 /helpme reset <玩家名|all> 或 /helpme myresets 或 /helpme reset give <玩家名|all> <数量> 或 /helpme reload
   quickfix:
     description: 修复主手物品并清除铁砧修复费用
     usage: /quickfix
@@ -51,10 +51,13 @@ commands:
     permission-message: 你没有使用此命令的权限。
 permissions:
   azureland.helpme:
-    description: 允许向服务器 AI 助手提问、创建和删除自己的会话、查看自己的会话历史
+    description: 允许向服务器 AI 助手提问、创建、重命名和删除自己的会话、查看自己的会话历史
     default: true
   azureland.helpme.reload:
     description: 允许重新加载 AI 助手配置
+    default: op
+  azureland.helpme.conversations.add:
+    description: 允许增加或减少指定玩家的 AI 会话数量上限
     default: op
   azureland.helpme.status:
     description: 允许查询自己的 AI 限额

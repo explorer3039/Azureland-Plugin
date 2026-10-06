@@ -34,7 +34,7 @@ final class HelpMeMenu implements Listener {
         this.command = command;
     }
 
-    void open(Player player, List<ConversationStore.Summary> sessions, int requestedPage) {
+    void open(Player player, List<ConversationStore.Summary> sessions, int limit, int requestedPage) {
         // The creation button is the final entry, including when it starts a new page.
         int pages = (sessions.size() + 1 + PAGE_SIZE - 1) / PAGE_SIZE;
         int page = Math.max(0, Math.min(requestedPage, pages - 1));
@@ -43,7 +43,7 @@ final class HelpMeMenu implements Listener {
         inventory.setItem(0, item(Material.BOOK, "命令帮助", NamedTextColor.AQUA,
                 "直接提问：/helpme <问题>", "点击查看完整命令帮助"));
         inventory.setItem(4, item(Material.NETHER_STAR, "你的会话空间", NamedTextColor.GOLD,
-                "共有 " + sessions.size() + " 个独立会话",
+                "会话数量：" + sessions.size() + " / " + limit,
                 "左键会话进入操作菜单", "创建按钮紧跟在最后一个会话后面"));
         inventory.setItem(8, item(Material.LANTERN, "操作指南", NamedTextColor.YELLOW,
                 "先左键打开一个会话", "再选择提问、查看历史或删除会话",
@@ -53,9 +53,14 @@ final class HelpMeMenu implements Listener {
             int position = i - page * PAGE_SIZE;
             int slot = 10 + position / 7 * 9 + position % 7;
             if (i == sessions.size()) {
-                inventory.setItem(slot, item(Material.EMERALD,
-                        sessions.isEmpty() ? "创建你的第一个会话" : "创建新会话", NamedTextColor.GREEN,
-                        "按主题保存聊天，例如「建筑」或「生存」", "", "左键输入会话名称"));
+                if (sessions.size() >= limit) {
+                    inventory.setItem(slot, item(Material.BARRIER, "会话数量已达上限", NamedTextColor.RED,
+                            "当前上限：" + limit + " 个", "请删除已有会话或联系管理员增加额度"));
+                } else {
+                    inventory.setItem(slot, item(Material.EMERALD,
+                            sessions.isEmpty() ? "创建你的第一个会话" : "创建新会话", NamedTextColor.GREEN,
+                            "按主题保存聊天，例如「建筑」或「生存」", "", "左键输入会话名称"));
+                }
                 menu.createSlot = slot;
             } else {
                 ConversationStore.Summary session = sessions.get(i);
@@ -90,6 +95,8 @@ final class HelpMeMenu implements Listener {
                 "每页一轮对话，上方问题、下方回复", "长消息可在 dialog 中手动滚动"));
         inventory.setItem(15, item(Material.TNT, "删除会话", NamedTextColor.RED,
                 "删除会话名称和全部聊天历史", "点击后需要确认", "每日用量和赠送额度保持不变"));
+        inventory.setItem(20, item(Material.NAME_TAG, "修改名称", NamedTextColor.YELLOW,
+                "输入新的会话名称", "保留全部聊天历史和列表位置"));
         inventory.setItem(22, item(Material.ARROW, "返回会话列表", NamedTextColor.AQUA));
         inventory.setItem(26, item(Material.BARRIER, "关闭菜单", NamedTextColor.RED));
         show(player, menu);

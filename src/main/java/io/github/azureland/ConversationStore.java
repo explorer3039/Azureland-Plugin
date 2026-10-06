@@ -16,9 +16,10 @@ import java.util.Map;
 import java.util.UUID;
 
 final class ConversationStore {
+    private static final int DEFAULT_LIMIT = 20;
     record Loaded(String name, Conversation conversation) { }
     record Summary(String name, int exchanges, long tokens, String lastQuestion) { }
-    private record Sessions(Map<String, Conversation.Snapshot> conversations) { }
+    private record Sessions(Map<String, Conversation.Snapshot> conversations, int limit) { }
 
     private final Path directory;
     private final Gson gson = new Gson();
@@ -38,7 +39,7 @@ final class ConversationStore {
         }
         Path file = directory.resolve(player + ".json");
         if (!Files.exists(file)) {
-            players.put(player, new Sessions(new LinkedHashMap<>()));
+            players.put(player, new Sessions(new LinkedHashMap<>(), DEFAULT_LIMIT));
             return;
         }
         try {
@@ -46,11 +47,14 @@ final class ConversationStore {
             Sessions sessions;
             if (json.has("messages")) {
                 Conversation.Snapshot history = gson.fromJson(json, Conversation.Snapshot.class);
-                sessions = new Sessions(new LinkedHashMap<>(Map.of("历史会话", history)));
+                sessions = new Sessions(new LinkedHashMap<>(Map.of("历史会话", history)), DEFAULT_LIMIT);
             } else {
                 sessions = gson.fromJson(json, Sessions.class);
+                if (!json.has("limit")) {
+                    sessions = new Sessions(sessions.conversations(), DEFAULT_LIMIT);
+                }
             }
-            if (sessions.conversations() == null) {
+            if (sessions.conversations() == null || sessions.limit() < 0) {
                 throw new JsonParseException("Invalid conversations");
             }
             for (var entry : sessions.conversations().entrySet()) {
@@ -79,6 +83,21 @@ final class ConversationStore {
 
     synchronized boolean contains(UUID player, String name) {
         return players.get(player).conversations().containsKey(name);
+    }
+
+    synchronized int limit(UUID player) {
+        return players.get(player).limit();
+    }
+
+    synchronized int addLimit(UUID player, int amount) throws IOException {
+        initialize(player);
+        Sessions current = players.get(player);
+        long limit = Math.max(0L, (long) current.limit() + amount);
+        if (limit > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("调整后的会话上限超出整数范围。");
+        }
+        persist(player, new Sessions(current.conversations(), (int) limit));
+        return (int) limit;
     }
 
     synchronized List<Summary> summaries(UUID player) {
@@ -115,9 +134,13 @@ final class ConversationStore {
         if (current.conversations().containsKey(name)) {
             throw new IllegalArgumentException("会话“" + name + "”已存在，请通过 /helpme 菜单打开。");
         }
+        if (current.conversations().size() >= current.limit()) {
+            throw new IllegalArgumentException("会话数量已达到上限（" + current.limit()
+                    + " 个），请删除已有会话或联系管理员增加额度。");
+        }
         Map<String, Conversation.Snapshot> conversations = new LinkedHashMap<>(current.conversations());
         conversations.put(name, new Conversation().snapshot());
-        persist(player, new Sessions(conversations));
+        persist(player, new Sessions(conversations, current.limit()));
     }
 
     synchronized Loaded load(UUID player, String name) throws IOException {
@@ -137,7 +160,7 @@ final class ConversationStore {
         Sessions current = players.get(player);
         Map<String, Conversation.Snapshot> conversations = new LinkedHashMap<>(current.conversations());
         conversations.put(loaded.name(), loaded.conversation().snapshot());
-        persist(player, new Sessions(conversations));
+        persist(player, new Sessions(conversations, current.limit()));
     }
 
     synchronized void clear(UUID player, String name) throws IOException {
@@ -145,7 +168,7 @@ final class ConversationStore {
         requireConversation(current, name);
         Map<String, Conversation.Snapshot> conversations = new LinkedHashMap<>(current.conversations());
         conversations.put(name, new Conversation().snapshot());
-        persist(player, new Sessions(conversations));
+        persist(player, new Sessions(conversations, current.limit()));
     }
 
     synchronized void delete(UUID player, String name) throws IOException {
@@ -153,7 +176,22 @@ final class ConversationStore {
         requireConversation(current, name);
         Map<String, Conversation.Snapshot> conversations = new LinkedHashMap<>(current.conversations());
         conversations.remove(name);
-        persist(player, new Sessions(conversations));
+        persist(player, new Sessions(conversations, current.limit()));
+    }
+
+    synchronized void rename(UUID player, String name, String newName) throws IOException {
+        Sessions current = players.get(player);
+        requireConversation(current, name);
+        if (name.equals(newName)) {
+            return;
+        }
+        if (current.conversations().containsKey(newName)) {
+            throw new IllegalArgumentException("会话“" + newName + "”已存在，请使用其他名称。");
+        }
+        Map<String, Conversation.Snapshot> conversations = new LinkedHashMap<>();
+        current.conversations().forEach((key, snapshot) ->
+                conversations.put(key.equals(name) ? newName : key, snapshot));
+        persist(player, new Sessions(conversations, current.limit()));
     }
 
     private void requireConversation(Sessions sessions, String name) {
