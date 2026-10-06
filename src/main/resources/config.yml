@@ -1,0 +1,46 @@
+config-version: 4
+
+quickfix:
+  # 每次成功修复的金币消耗，0 为免费；收费需要 Vault 兼容的经济服务。
+  cost: 30
+
+ai:
+  enabled: true
+  # openai（Chat Completions）/ openai-responses / anthropic / gemini。
+  provider: openai-responses
+  # API 根地址，不含具体接口路径；切换 provider 时同时修改地址和模型。
+  # Anthropic: https://api.anthropic.com/v1
+  # Gemini: https://generativelanguage.googleapis.com/v1beta
+  base-url: https://api.openai.com/v1
+  api-key: ''
+  model: gpt-5-mini
+  # 留空则不发送思考参数；各 provider 的字段和可用值不同，详见 README。
+  reasoning-effort: medium
+  # 使用对应 provider 的原生搜索；模型和接口必须支持，详见 README。
+  web-search:
+    enabled: true
+  # AI 按需读取插件名称、版本和启用状态，不读取插件配置。
+  plugin-list:
+    enabled: true
+  system-prompt: |-
+    你是 Azureland Minecraft 服务器的 AI 助手，请用简洁的中文回答玩家的问题，可以使用 Markdown 排版。
+    可适度用 <color:yellow>重点</color> 或 <color:#55FF55>文字</color> 设置文字颜色，颜色标签必须闭合；不要使用其他交互标签。
+    你可以提供游戏建议，但无法执行命令或读取插件配置。
+    需要了解服务器安装了哪些插件时，请调用插件列表工具，不要猜测。
+    涉及最新资料或需要核实时，若有联网搜索工具请先搜索，并引用来源。
+    对不清楚的服务器规则和插件设置，请让玩家咨询管理员，不要编造。
+  timeout-seconds: 60
+  # 包含思考 token 和回答 token。
+  max-output-tokens: 4096
+  max-question-length: 1000
+  cooldown-seconds: 10
+  max-concurrent-requests: 4
+  global-daily-credit-limit: 10000000
+  player-daily-credit-limit: 500000
+  # 每个 token 消耗的 credits；缓存读取部分仅按 cached-input 收费，不重复计算 input。
+  credits-per-token:
+    input: 4
+    output: 12
+    cached-input: 1
+  context-token-limit: 100000
+  daily-reset-timezone: Asia/Shanghai

@@ -1,0 +1,103 @@
+name: AzurelandPlugin
+version: 1.0.0
+main: io.github.azureland.AzurelandPlugin
+api-version: '1.21.8'
+folia-supported: true
+softdepend: [Vault, VaultUnlocked]
+description: Item repair, portable workstations and a configurable multi-provider AI server assistant.
+commands:
+  helpme:
+    description: 打开 AI 会话菜单或向服务器 AI 助手提问
+    usage: /helpme 或 /helpme <问题> 或 /helpme create [会话名] 或 /helpme history [会话名] 或 /helpme clear <会话名> 或 /helpme help 或 /helpme status [玩家名] 或 /helpme give <玩家名> <credits> 或 /helpme reset <玩家名|all> 或 /helpme myresets 或 /helpme reset give <玩家名|all> <数量> 或 /helpme reload
+  quickfix:
+    description: 修复主手物品并清除铁砧修复费用
+    usage: /quickfix
+    permission: azureland.quickfix
+    permission-message: 你没有使用此命令的权限。
+  craft:
+    description: 打开工作台界面
+    usage: /craft
+    permission: azureland.craft
+    permission-message: 你没有使用此命令的权限。
+  anvil:
+    description: 打开铁砧界面
+    usage: /anvil
+    permission: azureland.anvil
+    permission-message: 你没有使用此命令的权限。
+  smithing:
+    description: 打开锻造台界面
+    usage: /smithing
+    permission: azureland.smithing
+    permission-message: 你没有使用此命令的权限。
+  grindstone:
+    description: 打开砂轮界面
+    usage: /grindstone
+    permission: azureland.grindstone
+    permission-message: 你没有使用此命令的权限。
+  loom:
+    description: 打开织布机界面
+    usage: /loom
+    permission: azureland.loom
+    permission-message: 你没有使用此命令的权限。
+  cartography:
+    description: 打开制图台界面
+    usage: /cartography
+    permission: azureland.cartography
+    permission-message: 你没有使用此命令的权限。
+  stonecutter:
+    description: 打开切石机界面
+    usage: /stonecutter
+    permission: azureland.stonecutter
+    permission-message: 你没有使用此命令的权限。
+permissions:
+  azureland.helpme:
+    description: 允许向服务器 AI 助手提问、创建和删除自己的会话、查看自己的会话历史
+    default: true
+  azureland.helpme.reload:
+    description: 允许重新加载 AI 助手配置
+    default: op
+  azureland.helpme.status:
+    description: 允许查询自己的 AI 限额
+    default: true
+  azureland.helpme.status.others:
+    description: 允许查询其他玩家的 AI 限额
+    default: op
+  azureland.helpme.give:
+    description: 允许给玩家增加今日 AI credits 额度
+    default: op
+  azureland.helpme.reset:
+    description: 允许重置指定玩家或全服的今日 AI credits 用量
+    default: op
+  azureland.helpme.myresets:
+    description: 允许查看并使用自己的 AI 额度重置卡
+    default: true
+  azureland.helpme.reset.give:
+    description: 允许向指定玩家或全服发放 AI 额度重置卡
+    default: op
+  azureland.helpme.clear:
+    description: 允许清空自己的指定 AI 会话上下文
+    default: true
+  azureland.quickfix:
+    description: 允许使用 /quickfix
+    default: op
+  azureland.craft:
+    description: 允许使用 /craft
+    default: true
+  azureland.anvil:
+    description: 允许使用 /anvil
+    default: true
+  azureland.smithing:
+    description: 允许使用 /smithing
+    default: true
+  azureland.grindstone:
+    description: 允许使用 /grindstone
+    default: true
+  azureland.loom:
+    description: 允许使用 /loom
+    default: true
+  azureland.cartography:
+    description: 允许使用 /cartography
+    default: true
+  azureland.stonecutter:
+    description: 允许使用 /stonecutter
+    default: true
